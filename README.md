@@ -1,0 +1,1 @@
+# coinbase-validator-identifier
