@@ -1,15 +1,14 @@
 import EventLogDecoder
+from utils import get_last_block, write_data, write_checkpoint
+import Postgres
 from web3 import Web3, HTTPProvider
 import os
 import requests
 import time
-import binascii
 import psycopg2
-import sys
 import argparse
 from tqdm import tqdm
 import json
-from psycopg2.extras import DictCursor
 from dotenv import load_dotenv
 load_dotenv()
 INFURA_URL = f'https://mainnet.infura.io/v3/{os.environ.get("INFURA_PROJECT_ID")}'
@@ -17,85 +16,11 @@ API_KEY = os.environ.get("C_KEY")
 BEACONCHAIN_CONTRACT_ADDRESS = '0x00000000219ab540356cBB839Cbe05303d7705Fa'
 COINBASE_ADDRESS = '0xA090e606E30bD747d4E6245a1517EbE430F0057e'
 
-# function to convert bytea data to string
 
-
-def data_to_str(s):
-    if s is None:
-        return None
-    if isinstance(s, bytes):
-        return binascii.hexlify(s).decode('utf-8')
-    return str(s)
-
-
-def get_last_block(conn):
-    last_block = 0
-    if os.path.isfile('checkpoint.txt'):
-        with open('checkpoint.txt', 'r') as file:
-            lines = file.readlines()
-            last_line = lines[-1]
-            print("found checkpoint:", last_line.strip())
-            last_block = int(last_line.strip())
-    elif os.path.isfile('coinbase.txt'):
-        with open('coinbase.txt', 'r') as file:
-            lines = file.readlines()
-            if lines:
-                last_line = lines[-1]
-                print("Last validator found:", last_line.strip())
-                query = f"SELECT f_eth1_block_number FROM t_eth1_deposits WHERE f_validator_pubkey = '{last_line.strip()}';"
-                data = dict_query(conn, query)
-                last_block = data[0]['f_eth1_block_number']
-    return last_block
-
-
-def write_data(validators):
-    with open('coinbase.txt', 'a') as file:
-        for validator in validators:
-            file.write(f'{validator}\n')
-
-
-def dict_query(conn, sql):
-    # create a cursor with DictCursor and custom functions
-    cursor = conn.cursor(cursor_factory=DictCursor)
-    psycopg2.extensions.register_adapter(bytes, data_to_str)
-
-    # execute the SELECT statement
-    cursor.execute(
-        sql)
-    data = [dict(row) for row in cursor.fetchall()]
-    # close the cursor and connection
-    cursor.close()
-
-    # return all the data from the table as dictionaries
-    return data
-
-# unused
-# def get_known_validators():
-#     import os
-
-#     directory = "./validators/"  # Replace with the directory path you want to read
-
-#     validators = set()  # Create an empty set to store the lines
-
-#     for filename in os.listdir(directory):
-#         filepath = os.path.join(directory, filename)
-#         with open(filepath, "r") as file:
-#             for line in file:
-#                 # print(repr(line.strip()))
-#                 validators.add(line.strip())
-
-#     return validators
-
-
-def write_checkpoint(block_number):
-    with open('checkpoint.txt', 'w') as file:
-        file.write(str(block_number))
-
-
-def connect_database(port, name, user, password):
+def connect_database(port, database, user, password):
     conn = psycopg2.connect(
         port=port,
-        database=name,
+        database=database,
         user=user,
         password=password
     )
@@ -123,12 +48,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     port, database, user, password = parse_db_connection_string(
         args.postgres)
-    conn = psycopg2.connect(
-        port=port,
-        database=database,
-        user=user,
-        password=password
-    )
     print("Connected to database")
     with open('contract_abi.json', 'r') as file:
         # Connect to an Ethereum node
@@ -140,10 +59,11 @@ if __name__ == "__main__":
             address=BEACONCHAIN_CONTRACT_ADDRESS, abi=abi)
         eld = EventLogDecoder.EventLogDecoder(contract)
 
-        last_block = get_last_block(conn)
-
-        contract_deposits = dict_query(
-            conn, f"SELECT f_eth1_sender, f_validator_pubkey, f_eth1_block_number FROM t_eth1_deposits WHERE f_eth1_sender NOT IN (SELECT f_eth1_sender FROM t_eth1_deposits GROUP BY f_eth1_sender HAVING COUNT(*) > 1) AND f_eth1_block_number > {last_block} ORDER BY f_eth1_block_number ASC;")
+        db = Postgres.Postgres(port=port, database=database,
+                               user=user, password=password)
+        last_block = get_last_block(db)
+        contract_deposits = db.dict_query(
+            f"SELECT f_eth1_sender, f_validator_pubkey, f_eth1_block_number FROM t_eth1_deposits WHERE f_eth1_sender NOT IN (SELECT f_eth1_sender FROM t_eth1_deposits GROUP BY f_eth1_sender HAVING COUNT(*) > 1) AND f_eth1_block_number > {last_block} ORDER BY f_eth1_block_number ASC;")
 
         validators = []
         # known_validators = get_known_validators()
@@ -193,4 +113,4 @@ if __name__ == "__main__":
             # else:
         #   print('Known validator', "\\" +
         #        bytes(row['f_validator_pubkey']).hex())
-        conn.close()
+        db.close()
