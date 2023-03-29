@@ -17,16 +17,6 @@ BEACONCHAIN_CONTRACT_ADDRESS = '0x00000000219ab540356cBB839Cbe05303d7705Fa'
 COINBASE_ADDRESS = '0xA090e606E30bD747d4E6245a1517EbE430F0057e'
 
 
-def connect_database(port, database, user, password):
-    conn = psycopg2.connect(
-        port=port,
-        database=database,
-        user=user,
-        password=password
-    )
-    return conn
-
-
 def create_arg_parser():
     parser = argparse.ArgumentParser(
         description="Uses eth deposits to beaconchain contract to identify coinbase validators")
