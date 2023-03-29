@@ -13,7 +13,7 @@ def data_to_str(s):
 
 
 class Postgres:
-    def __init__(self, port, user, password, database):
+    def __init__(self, port, user, password, database, host='localhost'):
         self.port = port
         self.user = user
         self.password = password
@@ -22,7 +22,8 @@ class Postgres:
             port=port,
             database=database,
             user=user,
-            password=password
+            password=password,
+            host=host
         )
 
     def dict_query(self, sql):

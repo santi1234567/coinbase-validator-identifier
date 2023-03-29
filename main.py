@@ -29,7 +29,8 @@ def parse_db_connection_string(s):
     database = s.split(':')[3].split('/')[1]
     user = s.split(':')[1].split('@')[0].split('//')[1]
     password = s.split(':')[2].split('@')[0]
-    return port, database, user, password
+    host = s.split(':')[2].split('@')[1]
+    return port, database, user, password, host
 
 
 if __name__ == "__main__":
@@ -39,7 +40,7 @@ if __name__ == "__main__":
         args = parser.parse_args()
         postgres_endpoint = args.postgres
     try:
-        port, database, user, password = parse_db_connection_string(
+        port, database, user, password, host = parse_db_connection_string(
             postgres_endpoint)
     except:
         print("Invalid postgres connection string. Enter a valid connection string or set the POSTGRES_ENDPOINT environment variable.")
@@ -56,7 +57,7 @@ if __name__ == "__main__":
         eld = EventLogDecoder.EventLogDecoder(contract)
 
         db = Postgres.Postgres(port=port, database=database,
-                               user=user, password=password)
+                               user=user, password=password, host=host)
         last_block = get_last_block(db)
         contract_deposits = db.dict_query(
             f"SELECT f_eth1_sender, f_validator_pubkey, f_eth1_block_number FROM t_eth1_deposits WHERE f_eth1_sender NOT IN (SELECT f_eth1_sender FROM t_eth1_deposits GROUP BY f_eth1_sender HAVING COUNT(*) > 1) AND f_eth1_block_number > {last_block} ORDER BY f_eth1_block_number ASC;")
