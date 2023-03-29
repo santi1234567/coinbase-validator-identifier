@@ -45,7 +45,6 @@ if __name__ == "__main__":
     except:
         print("Invalid postgres connection string. Enter a valid connection string or set the POSTGRES_ENDPOINT environment variable.")
         exit()
-    print("Connected to database")
     with open('contract_abi.json', 'r') as file:
         # Connect to an Ethereum node
         w3 = Web3(HTTPProvider(INFURA_URL))
@@ -58,6 +57,7 @@ if __name__ == "__main__":
 
         db = Postgres.Postgres(port=port, database=database,
                                user=user, password=password, host=host)
+        print("Connected to database")
         last_block = get_last_block(db)
         contract_deposits = db.dict_query(
             f"SELECT f_eth1_sender, f_validator_pubkey, f_eth1_block_number FROM t_eth1_deposits WHERE f_eth1_sender NOT IN (SELECT f_eth1_sender FROM t_eth1_deposits GROUP BY f_eth1_sender HAVING COUNT(*) > 1) AND f_eth1_block_number > {last_block} ORDER BY f_eth1_block_number ASC;")
