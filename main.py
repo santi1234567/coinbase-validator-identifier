@@ -33,10 +33,17 @@ def parse_db_connection_string(s):
 
 
 if __name__ == "__main__":
-    parser = create_arg_parser()
-    args = parser.parse_args()
-    port, database, user, password = parse_db_connection_string(
-        args.postgres)
+    postgres_endpoint = os.environ.get("POSTGRES_ENDPOINT")
+    if not postgres_endpoint:
+        parser = create_arg_parser()
+        args = parser.parse_args()
+        postgres_endpoint = args.postgres
+    try:
+        port, database, user, password = parse_db_connection_string(
+            postgres_endpoint)
+    except:
+        print("Invalid postgres connection string. Enter a valid connection string or set the POSTGRES_ENDPOINT environment variable.")
+        exit()
     print("Connected to database")
     with open('contract_abi.json', 'r') as file:
         # Connect to an Ethereum node
