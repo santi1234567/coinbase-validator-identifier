@@ -5,7 +5,6 @@ from web3 import Web3, HTTPProvider
 import os
 import requests
 import time
-import psycopg2
 import argparse
 from tqdm import tqdm
 import json
