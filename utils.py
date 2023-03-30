@@ -30,7 +30,7 @@ def write_checkpoint(block_number):
         file.write(str(block_number))
 
 
-def get_last_block(db):
+def get_last_block(db, save_into_db):
     last_block = 0
     if os.path.isfile('checkpoint.txt'):
         with open('checkpoint.txt', 'r') as file:
@@ -38,6 +38,12 @@ def get_last_block(db):
             last_line = lines[-1]
             print("found checkpoint:", last_line.strip())
             last_block = int(last_line.strip())
+    elif save_into_db:
+        query = "SELECT f_eth1_block_number, f_validator_pubkey FROM t_eth1_deposits WHERE f_validator_pubkey IN(SELECT f_validator_pubkey FROM t_coinbase_validators) ORDER BY f_eth1_block_number DESC LIMIT 1"
+        data = db.dict_query(query)
+        print("Last validator found:", "\\x"+bytes(
+            data[0]['f_validator_pubkey']).hex())
+        last_block = data[0]['f_eth1_block_number']
     elif os.path.isfile('coinbase.txt'):
         with open('coinbase.txt', 'r') as file:
             lines = file.readlines()

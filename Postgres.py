@@ -43,3 +43,36 @@ class Postgres:
 
     def close(self):
         self.conn.close()
+
+    def create_table(self, table_name, columns, primary_key):
+        cursor = self.conn.cursor()
+        # cursor.execute(f"DROP TABLE IF EXISTS public.{table_name};")
+        cursor.execute(
+            f"CREATE TABLE IF NOT EXISTS public.{table_name}({columns}, CONSTRAINT {table_name}_pkey PRIMARY KEY ({primary_key})) TABLESPACE pg_default; ALTER TABLE IF EXISTS public.{table_name} OWNER TO chain;")
+        self.conn.commit()
+        cursor.close()
+
+    def insert_row(self, table_name, columns, values):
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(
+                f"INSERT INTO {table_name} ({columns}) VALUES ({values})")
+            self.conn.commit()
+        except:
+            self.conn.rollback()
+            cursor.close()
+            raise
+        cursor.close()
+
+    def insert_rows(self, table_name, columns, values):
+        cursor = self.conn.cursor()
+        values = [(value,) for value in values]
+        try:
+            cursor.executemany(
+                f"INSERT INTO {table_name} ({columns}) VALUES (%s)", values)
+            self.conn.commit()
+        except:
+            self.conn.rollback()
+            cursor.close()
+            raise
+        cursor.close()

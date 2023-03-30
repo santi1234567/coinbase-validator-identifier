@@ -21,6 +21,8 @@ def create_arg_parser():
         description="Uses eth deposits to beaconchain contract to identify coinbase validators")
     parser.add_argument(
         "--postgres", "--db", metavar="CONNECTION_STRING", type=str, help="postgres connection string. Example: postgresql://user:password@netloc:port/dbname")
+    parser.add_argument("--save-in-db", action="store_true",
+                        help="Save the results in the database")
     return parser
 
 
@@ -35,9 +37,9 @@ def parse_db_connection_string(s):
 
 if __name__ == "__main__":
     postgres_endpoint = os.environ.get("POSTGRES_ENDPOINT")
+    parser = create_arg_parser()
+    args = parser.parse_args()
     if not postgres_endpoint:
-        parser = create_arg_parser()
-        args = parser.parse_args()
         postgres_endpoint = args.postgres
     try:
         port, database, user, password, host = parse_db_connection_string(
@@ -57,17 +59,23 @@ if __name__ == "__main__":
 
         db = Postgres.Postgres(port=port, database=database,
                                user=user, password=password, host=host)
+        if args.save_in_db:
+            db.create_table("t_coinbase_validators",
+                            "f_validator_pubkey bytea NOT NULL", "f_validator_pubkey")
         print("Connected to database")
-        last_block = get_last_block(db)
-        contract_deposits = db.dict_query(
-            f"SELECT f_eth1_sender, f_validator_pubkey, f_eth1_block_number FROM t_eth1_deposits WHERE f_eth1_sender NOT IN (SELECT f_eth1_sender FROM t_eth1_deposits GROUP BY f_eth1_sender HAVING COUNT(*) > 1) AND f_eth1_block_number > {last_block} ORDER BY f_eth1_block_number ASC;")
+        last_block = get_last_block(db, save_into_db=args.save_in_db)
+        print("Last block processed:", last_block)
+        try:
+            contract_deposits = db.dict_query(
+                f"SELECT f_eth1_sender, f_validator_pubkey, f_eth1_block_number FROM t_eth1_deposits WHERE f_eth1_sender NOT IN (SELECT f_eth1_sender FROM t_eth1_deposits GROUP BY f_eth1_sender HAVING COUNT(*) > 1) AND f_eth1_block_number > {last_block} ORDER BY f_eth1_block_number ASC;")
+        except Exception as e:
+            print("Error:", e)
+            exit()
 
         validators = []
-        # known_validators = get_known_validators()
         CHECKPOINT_COUNT_AMOUNT = 100
         checkpoint_count = 0
         for row in tqdm(contract_deposits):
-            # if "\\"+bytes(row['f_validator_pubkey']).hex() not in known_validators:
             while True:
                 try:
                     sender = '0x'+bytes(row['f_eth1_sender']).hex()
@@ -98,7 +106,11 @@ if __name__ == "__main__":
                         validators.append(f'\\x{pub_key}')
                     checkpoint_count += 1
                     if checkpoint_count >= CHECKPOINT_COUNT_AMOUNT or row == contract_deposits[-1]:
-                        write_data(validators)
+                        if args.save_in_db:
+                            db.insert_rows("t_coinbase_validators",
+                                           "f_validator_pubkey", validators)
+                        else:
+                            write_data(validators)
                         validators = []
                         block_number = row['f_eth1_block_number']
                         write_checkpoint(block_number)
@@ -107,7 +119,4 @@ if __name__ == "__main__":
                 except Exception as e:
                     print('Error:', e)
                     time.sleep(10)
-            # else:
-        #   print('Known validator', "\\" +
-        #        bytes(row['f_validator_pubkey']).hex())
         db.close()
