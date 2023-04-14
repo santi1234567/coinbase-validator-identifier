@@ -2,7 +2,6 @@ import EventLogDecoder
 from utils import get_last_block, write_data, write_checkpoint
 import Postgres
 from web3 import Web3, HTTPProvider
-import os
 import requests
 import time
 import argparse
@@ -10,8 +9,6 @@ from tqdm import tqdm
 import json
 from dotenv import load_dotenv
 load_dotenv()
-INFURA_URL = f'https://mainnet.infura.io/v3/{os.environ.get("INFURA_PROJECT_ID")}'
-API_KEY = os.environ.get("C_KEY")
 BEACONCHAIN_CONTRACT_ADDRESS = '0x00000000219ab540356cBB839Cbe05303d7705Fa'
 COINBASE_ADDRESS = '0xA090e606E30bD747d4E6245a1517EbE430F0057e'
 
@@ -23,6 +20,10 @@ def create_arg_parser():
         "--postgres", "--db", metavar="CONNECTION_STRING", type=str, help="postgres connection string. Example: postgresql://user:password@netloc:port/dbname")
     parser.add_argument("--save-in-db", action="store_true",
                         help="Save the results in the database")
+    parser.add_argument("--infura-project-id",
+                        metavar="INFURA_PROJECT_ID", type=str, help="Infura project id")
+    parser.add_argument(
+        "--covalent-api-key", metavar="COVALENT_API_KEY", type=str, help="Covalent API key")
     return parser
 
 
@@ -36,11 +37,11 @@ def parse_db_connection_string(s):
 
 
 if __name__ == "__main__":
-    postgres_endpoint = os.environ.get("POSTGRES_ENDPOINT")
     parser = create_arg_parser()
     args = parser.parse_args()
-    if not postgres_endpoint:
-        postgres_endpoint = args.postgres
+    infura_url = f'https://mainnet.infura.io/v3/{args.infura_project_id}'
+    covalent_api_key = args.covalent_api_key
+    postgres_endpoint = args.postgres
     try:
         port, database, user, password, host = parse_db_connection_string(
             postgres_endpoint)
@@ -49,7 +50,7 @@ if __name__ == "__main__":
         exit()
     with open('contract_abi.json', 'r') as file:
         # Connect to an Ethereum node
-        w3 = Web3(HTTPProvider(INFURA_URL))
+        w3 = Web3(HTTPProvider(infura_url))
 
         abi = json.load(file)
         # connect to the database
@@ -80,7 +81,7 @@ if __name__ == "__main__":
                 try:
                     sender = '0x'+bytes(row['f_eth1_sender']).hex()
                     request = requests.get(
-                        f'https://api.covalenthq.com/v1/eth-mainnet/address/{sender}/transactions_v3/?key={API_KEY}')
+                        f'https://api.covalenthq.com/v1/eth-mainnet/address/{sender}/transactions_v3/?key={covalent_api_key}')
                     transactions = request.json()['data']['items']
                     is_coinbase = False
                     tx_count_to_beaconchain_contract = 0
